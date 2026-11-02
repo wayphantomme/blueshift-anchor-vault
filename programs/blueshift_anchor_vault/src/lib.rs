@@ -30,6 +30,26 @@ pub mod blueshift_anchor_vault {
     }
 
     pub fn withdraw(ctx: Context<VaultAction>) -> Result<()> {
+        // The vault must hold lamports
+        require_neq!(ctx.accounts.vault.lamports(), 0, VaultError::InvalidAmount);
+
+        // The vault PDA signs with its seeds and bump
+        let signer_key = ctx.accounts.signer.key();
+        let signer_seeds: &[&[&[u8]]] = &[&[b"vault", signer_key.as_ref(), &[ctx.bumps.vault]]];
+
+        // CPI: vault sends all its lamports back to the signer
+        transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.key(),
+                Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.signer.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            ctx.accounts.vault.lamports(),
+        )?;
+
         Ok(())
     }
 }
